@@ -21,6 +21,7 @@
 
 import re
 import functools
+import typing
 import xml.etree.ElementTree
 from typing import cast, Iterable, Optional
 
@@ -30,6 +31,9 @@ from PyQt5.QtWidgets import QWidget
 from PyQt5.QtWebKitWidgets import QWebPage, QWebFrame
 from PyQt5.QtWebKit import QWebSettings, QWebHistory, QWebElement
 from PyQt5.QtPrintSupport import QPrinter
+
+if typing.TYPE_CHECKING:
+    from PyQt5.QtWebKit import QWebHistoryItem
 
 from qutebrowser.browser import browsertab, shared
 from qutebrowser.browser.webkit import (webview, tabhistory, webkitelem,
@@ -615,6 +619,26 @@ class WebKitScroller(browsertab.AbstractScroller):
         return self.pos_px().y() >= frame.scrollBarMaximum(Qt.Vertical)
 
 
+class WebKitHistoryItem(browsertab.AbstractHistoryItem):
+    """History item data derived from QWebHistoryItem."""
+
+    @classmethod
+    def from_qt(cls, qt_item, active=False):
+        """Construct a WebKitHistoryItem from a Qt history item.
+
+        Args:
+            qt_item: a QWebKitHistoryItem
+        """
+        qtutils.ensure_valid(qt_item)
+
+        return cls(
+            qt_item.url(),
+            qt_item.title(),
+            original_url=qt_item.originalUrl(),
+            active=active,
+            user_data=qt_item.userData())
+
+
 class WebKitHistoryPrivate(browsertab.AbstractHistoryPrivate):
 
     """History-related methods which are not part of the extension API."""
@@ -624,6 +648,11 @@ class WebKitHistoryPrivate(browsertab.AbstractHistoryPrivate):
         self._history = cast(QWebHistory, None)
 
     def serialize(self):
+        if self._tab.history.to_load:
+            _stream, data, _cur_data = tabhistory.serialize(
+                self._tab.history.to_load
+            )
+            return data
         return qtutils.serialize(self._history)
 
     def deserialize(self, data):
@@ -852,6 +881,10 @@ class WebKitTab(browsertab.AbstractTab):
         self._widget.load(url)
 
     def url(self, *, requested=False):
+        if not self.history.loaded and self.history.to_load:
+            idx = self.history.current_idx()
+            return self.history.to_load[idx].url
+
         frame = self._widget.page().mainFrame()
         if requested:
             return frame.requestedUrl()
@@ -876,6 +909,10 @@ class WebKitTab(browsertab.AbstractTab):
         return self._widget.icon()
 
     def reload(self, *, force=False):
+        if not self.history.loaded:
+            self.load()
+            return
+
         if force:
             action = QWebPage.ReloadAndBypassCache
         else:
@@ -887,6 +924,22 @@ class WebKitTab(browsertab.AbstractTab):
 
     def title(self):
         return self._widget.title()
+
+    def history_item_from_qt(self, item: browsertab.TypeHistoryItem,
+                             active: bool = False) -> WebKitHistoryItem:
+        return WebKitHistoryItem.from_qt(item, active)
+
+    def new_history_item(
+            self, url: QUrl, original_url: QUrl,
+            title: str, active: bool,
+            user_data: typing.Dict[str, typing.Any]) -> WebKitHistoryItem:
+        return WebKitHistoryItem(
+            url=url,
+            original_url=original_url,
+            title=title,
+            active=active,
+            user_data=user_data
+        )
 
     def renderer_process_pid(self) -> Optional[int]:
         return None

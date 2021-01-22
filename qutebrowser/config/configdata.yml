@@ -1830,6 +1830,24 @@ tabs.last_close:
     If the `tabs.tabs_are_windows` setting is set, this is ignored and the behavior is
     always identical to the `close` value.
 
+tabs.lifecycle_freeze_delay:
+  default: 30000
+  type:
+    name: Int
+    minval: 0
+    maxval: maxint
+  desc: "Duration (in milliseconds) to wait before freezing
+    tabs."
+
+tabs.lifecycle_discard_delay:
+  default: 100000
+  type:
+    name: Int
+    minval: 0
+    maxval: maxint
+  desc: "Duration (in milliseconds) to wait before discarding
+    tabs."
+
 tabs.mousewheel_switching:
   default: true
   type: Bool
