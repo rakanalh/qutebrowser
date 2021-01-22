@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2020 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2020-2021 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -86,7 +86,9 @@ def main():
     for wheel in input_files:
         utils.print_subtitle(wheel.stem.split('-')[0])
         subprocess.run([str(pyqt_bundle),
-                        '--qt-dir', args.qt_location, str(wheel)],
+                        '--qt-dir', args.qt_location,
+                        '--ignore-missing',
+                        str(wheel)],
                        check=True)
         wheel.unlink()
 

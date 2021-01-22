@@ -1,5 +1,5 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
-# Copyright 2015-2020 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2015-2021 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 
 # This file is part of qutebrowser.
 #
@@ -289,7 +289,7 @@ class TestParseYamlBackend:
         data = self._yaml("""
             backend:
               QtWebKit: {}
-              QtWebEngine: Qt 5.8
+              QtWebEngine: Qt 5.15
         """.format('true' if webkit else 'false'))
         monkeypatch.setattr(configdata.qtutils, 'version_check',
                             lambda v: has_new_version)

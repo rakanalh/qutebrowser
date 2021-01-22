@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2015-2020 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2015-2021 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -24,8 +24,8 @@
 import sys
 import logging
 import types
-import typing
 import enum
+from typing import Union
 
 import pytest
 
@@ -290,24 +290,28 @@ class TestRegister:
         else:
             assert pos_args == [('arg', 'arg')]
 
-    Enum = enum.Enum('Test', ['x', 'y'])
+    class Enum(enum.Enum):
+
+        # pylint: disable=invalid-name
+        x = enum.auto()
+        y = enum.auto()
 
     @pytest.mark.parametrize('typ, inp, choices, expected', [
         (int, '42', None, 42),
         (int, 'x', None, cmdexc.ArgumentTypeError),
         (str, 'foo', None, 'foo'),
 
-        (typing.Union[str, int], 'foo', None, 'foo'),
-        (typing.Union[str, int], '42', None, 42),
+        (Union[str, int], 'foo', None, 'foo'),
+        (Union[str, int], '42', None, 42),
 
         # Choices
         (str, 'foo', ['foo'], 'foo'),
         (str, 'bar', ['foo'], cmdexc.ArgumentTypeError),
 
         # Choices with Union: only checked when it's a str
-        (typing.Union[str, int], 'foo', ['foo'], 'foo'),
-        (typing.Union[str, int], 'bar', ['foo'], cmdexc.ArgumentTypeError),
-        (typing.Union[str, int], '42', ['foo'], 42),
+        (Union[str, int], 'foo', ['foo'], 'foo'),
+        (Union[str, int], 'bar', ['foo'], cmdexc.ArgumentTypeError),
+        (Union[str, int], '42', ['foo'], 42),
 
         (Enum, 'x', None, Enum.x),
         (Enum, 'z', None, cmdexc.ArgumentTypeError),

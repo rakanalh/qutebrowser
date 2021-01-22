@@ -1,6 +1,6 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
 
-# Copyright 2014-2020 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2014-2021 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 #
 # This file is part of qutebrowser.
 #
@@ -23,7 +23,7 @@ from PyQt5.QtCore import QUrl, pyqtSlot
 from PyQt5.QtNetwork import QNetworkProxy, QNetworkProxyFactory
 
 from qutebrowser.config import config, configtypes
-from qutebrowser.utils import message, usertypes, urlutils
+from qutebrowser.utils import message, usertypes, urlutils, utils
 from qutebrowser.misc import objects
 from qutebrowser.browser.network import pac
 
@@ -105,8 +105,10 @@ class ProxyFactory(QNetworkProxyFactory):
                 proxy = urlutils.proxy_from_url(QUrl('direct://'))
                 assert not isinstance(proxy, pac.PACFetcher)
                 proxies = [proxy]
-            else:
+            elif objects.backend == usertypes.Backend.QtWebKit:
                 proxies = proxy.resolve(query)
+            else:
+                raise utils.Unreachable(objects.backend)
         else:
             proxies = [proxy]
         for proxy in proxies:

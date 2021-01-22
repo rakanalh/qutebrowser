@@ -1,5 +1,5 @@
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
-# Copyright 2017-2020 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
+# Copyright 2017-2021 Florian Bruhin (The Compiler) <mail@qutebrowser.org>
 
 # This file is part of qutebrowser.
 #
@@ -28,7 +28,7 @@ from PyQt5.QtCore import QSettings
 
 from qutebrowser.config import (config, configfiles, configexc, configdata,
                                 configtypes)
-from qutebrowser.utils import utils, usertypes, urlmatch
+from qutebrowser.utils import utils, usertypes, urlmatch, standarddir
 from qutebrowser.keyinput import keyutils
 
 
@@ -330,6 +330,18 @@ class TestYaml:
         assert str(error.exception).splitlines()[0] == exception
         assert error.traceback is None
 
+    @pytest.mark.parametrize('value', [
+        42,  # value is not a dict
+        {'https://': True},  # Invalid pattern
+        {True: True},  # No string pattern
+    ])
+    def test_invalid_in_migrations(self, value, yaml, autoconfig):
+        """Make sure migrations work fine with an invalid structure."""
+        config = {key: value for key in configdata.DATA}
+        autoconfig.write(config)
+        with pytest.raises(configexc.ConfigFileErrors):
+            yaml.load()
+
     def test_legacy_migration(self, yaml, autoconfig, qtbot):
         autoconfig.write_toplevel({
             'config_version': 1,
@@ -605,6 +617,40 @@ class TestYamlMigrations:
         assert data['fonts.tabs.unselected']['global'] == val
         assert data['fonts.tabs.selected']['global'] == val
 
+    def test_content_media_capture(self, yaml, autoconfig):
+        val = 'ask'
+        autoconfig.write({'content.media_capture': {'global': val}})
+
+        yaml.load()
+        yaml._save()
+
+        data = autoconfig.read()
+        for setting in ['content.media.audio_capture',
+                        'content.media.audio_video_capture',
+                        'content.media.video_capture']:
+            assert data[setting]['global'] == val
+
+    def test_empty_pattern(self, yaml, autoconfig):
+        valid_pattern = 'https://example.com/*'
+        invalid_pattern = '*://*./*'
+        setting = 'content.javascript.enabled'
+
+        autoconfig.write({
+            setting: {
+                'global': False,
+                invalid_pattern: True,
+                valid_pattern: True,
+            }
+        })
+
+        yaml.load()
+        yaml._save()
+
+        data = autoconfig.read()
+        assert not data[setting]['global']
+        assert invalid_pattern not in data[setting]
+        assert data[setting][valid_pattern]
+
 
 class ConfPy:
 
@@ -613,6 +659,7 @@ class ConfPy:
     def __init__(self, tmpdir, filename: str = "config.py"):
         self._file = tmpdir / filename
         self.filename = str(self._file)
+        config.instance.warn_autoconfig = False
 
     def write(self, *lines):
         text = '\n'.join(lines)
@@ -761,9 +808,7 @@ class TestConfigPy:
     ])
     def test_get(self, confpy, set_first, get_line):
         """Test whether getting options works correctly."""
-        # pylint: disable=bad-config-option
-        config.val.colors.hints.fg = 'green'
-        # pylint: enable=bad-config-option
+        config.val.colors.hints.fg = 'green'  # pylint: disable=bad-config-option
         if set_first:
             confpy.write('c.colors.hints.fg = "red"',
                          'assert {} == "red"'.format(get_line))
@@ -908,6 +953,19 @@ class TestConfigPy:
         # points at the location *after* the +
         assert "    ^" in tblines or "     ^" in tblines
 
+    def test_load_autoconfig_warning(self, confpy):
+        confpy.write('')
+        config.instance.warn_autoconfig = True
+        with pytest.raises(configexc.ConfigFileErrors) as excinfo:
+            configfiles.read_config_py(confpy.filename)
+        assert len(excinfo.value.errors) == 1
+        error = excinfo.value.errors[0]
+        assert error.text == "autoconfig loading not specified"
+        exception_text = ('Your config.py should call either `config.load_autoconfig()`'
+                          ' (to load settings configured via the GUI) or '
+                          '`config.load_autoconfig(False)` (to not do so)')
+        assert str(error.exception) == exception_text
+
     def test_unhandled_exception(self, confpy):
         confpy.write("1/0")
         error = confpy.read(error=True)
@@ -1018,6 +1076,24 @@ class TestConfigPy:
 
         assert not config.instance.get_obj('content.javascript.enabled')
 
+    def test_source_configpy_arg(self, tmpdir, data_tmpdir, monkeypatch):
+        alt_filename = 'alt-config.py'
+
+        alt_confpy_dir = tmpdir / 'alt-confpy-dir'
+        alt_confpy_dir.ensure(dir=True)
+        monkeypatch.setattr(standarddir, 'config_py',
+                            lambda: str(alt_confpy_dir / alt_filename))
+
+        subfile = alt_confpy_dir / 'subfile.py'
+        subfile.write_text("c.content.javascript.enabled = False",
+                           encoding='utf-8')
+
+        alt_confpy = ConfPy(alt_confpy_dir, alt_filename)
+        alt_confpy.write("config.source('subfile.py')")
+        alt_confpy.read()
+
+        assert not config.instance.get_obj('content.javascript.enabled')
+
     def test_source_errors(self, tmpdir, confpy):
         subfile = tmpdir / 'config' / 'subfile.py'
         subfile.write_text("c.foo = 42", encoding='utf-8')
@@ -1080,8 +1156,8 @@ class TestConfigPyWriter:
             #   qute://help/configuring.html
             #   qute://help/settings.html
 
-            # Uncomment this to still load settings configured via autoconfig.yml
-            # config.load_autoconfig()
+            # Change the argument to True to still load settings configured via autoconfig.yml
+            config.load_autoconfig(False)
 
             # This is an option description.  Nullam eu ante vel est convallis
             # dignissim. Fusce suscipit, wisi nec facilisis facilisis, est dui
@@ -1133,7 +1209,7 @@ class TestConfigPyWriter:
         lines = list(writer._gen_lines())
 
         assert "## Autogenerated config.py" in lines
-        assert "# config.load_autoconfig()" in lines
+        assert "# config.load_autoconfig(True)" in lines
         assert "# c.opt = 'val'" in lines
         assert "## Bindings for normal mode" in lines
         assert "# config.bind(',x', 'message-info normal')" in lines
@@ -1182,7 +1258,7 @@ class TestConfigPyWriter:
                                             commented=False)
         lines = list(writer._gen_lines())
         assert lines[0] == '# Autogenerated config.py'
-        assert lines[-2] == '# config.load_autoconfig()'
+        assert lines[-2] == 'config.load_autoconfig(False)'
         assert not lines[-1]
 
     def test_pattern(self):
