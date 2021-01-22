@@ -246,6 +246,10 @@ class SessionManager(QObject):
             tab: The WebView to save.
             active: Whether the tab is currently active.
         """
+        # FIXME understand why this happens
+        if tab is None:
+            return {}
+
         data: _JsonType = {'history': []}
         if active:
             data['active'] = True
